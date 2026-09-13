@@ -1,41 +1,84 @@
-# Python cache and compiled files
+# Python 快取與編譯檔
+# 忽略 Python 執行時產生的快取資料夾
 __pycache__/
+
+# 忽略 Python 編譯後產生的 .pyc、.pyo 等檔案
 *.py[cod]
+
+# 忽略 Python 編譯產生的特定 class 快取檔
 *$py.class
 
-# Virtual environments
+
+# 虛擬環境
+# 忽略 Python 虛擬環境資料夾
 .venv/
 venv/
 env/
 ENV/
 
-# Packaging and build output
+
+# Python 打包與建置產物
+# 忽略 Python 建置過程產生的檔案
 .Python
+
+# 忽略打包／建置輸出的資料夾
 build/
 dist/
+
+# 忽略 Python 套件安裝資訊
 *.egg-info/
 .eggs/
+
+# 忽略 pip 建立的 wheel 暫存資料
 pip-wheel-metadata/
 
-# Test and tooling caches
+
+# 測試與開發工具產生的快取
+# pytest 測試快取
 .pytest_cache/
+
+# mypy 型別檢查快取
 .mypy_cache/
+
+# Ruff 程式碼檢查快取
 .ruff_cache/
+
+# 測試覆蓋率產生的檔案
 .coverage
+
+# HTML 格式的測試覆蓋率報告
 htmlcov/
 
-# IDE and editor files
+
+# IDE 與程式碼編輯器設定
+# Visual Studio Code 的專案設定
 .vscode/
+
+# JetBrains IDE 的專案設定
 .idea/
 
-# OS-generated files
+
+# 作業系統自動產生的檔案
+# macOS 自動產生的檔案
 .DS_Store
+
+# Windows 縮圖快取
 Thumbs.db
+
+# Windows 桌面設定檔
 desktop.ini
 
-# Pygame-generated files and local game data
+
+# Pygame 產生的檔案與本地遊戲資料
+# 忽略遊戲執行時產生的 log 紀錄
 *.log
+
+# 忽略遊戲存檔
 *.sav
 *.save
+
+# 忽略遊戲截圖資料夾
 screenshots/
+
+# 忽略遊戲錄影資料夾
 recordings/
