@@ -1,4 +1,7 @@
 ######################載入套件/ import packages######################
+import random
+# random 是用來生成隨機數的套件
+
 import pygame  # 匯入 pygame 模組
 # pygame 是製作遊戲和多媒體程式的套件
 
@@ -56,11 +59,46 @@ screen = pygame.display.set_mode(bg_size)  # 建立遊戲視窗
 # 建立遊戲視窗並使用設定好的大小
 
 ######################磚塊設定/ brick settings######################
+bricks_row=9
+# 設定磚塊的列數
+
+bricks_col=11
+# 設定磚塊的行數
+
+brick_w=58
+# 設定每個磚塊的寬度
+
+brick_h=16
+# 設定每個磚塊的高度
+
+bricks_gap=2
+# 設定磚塊之間的間隔
+
+bricks=[]
+# 建立空的磚塊列表，用來存放磚塊
+
+for col in range(bricks_col):
+    # 依照磚塊的行數重複執行
+    for row in range(bricks_row):
+        x=col*(brick_w+bricks_gap)+70
+        # 計算每個磚塊的 X 座標
+
+        y=row*(brick_h+bricks_gap)+60
+        # 計算每個磚塊的 Y 座標
+
+        color=(random.randint(20,255),random.randint(0,255),random.randint(0,255))
+        # 隨機產生磚塊的顏色
+
+        brick=Brick(x,y,brick_w,brick_h,color)
+        # 建立一個磚塊物件
+
+        bricks.append(brick)
+        # 將建立好的磚塊加入磚塊列表
 
 ######################顯示文字設定/ text display settings######################
 
 ######################底板設定/ paddle settings######################
-
+    pad=Brick(0,bg_y-48,brick_w,brick_h,(255,255,255))
 ######################球設定/ ball settings######################
 
 ######################遊戲結束設定/ game over settings######################
@@ -68,7 +106,16 @@ screen = pygame.display.set_mode(bg_size)  # 建立遊戲視窗
 ######################主程式/ main program######################
 while True:
     # 持續執行遊戲主程式
-
+    screen.fill((0,0,0))
+    # 清除背景
+    mos_x,mos_y=pygame.mouse.get_pos()
+    # 取得滑鼠的座標
+    pad.rect.x=mos_x-pad.rect.width//2
+    if pad.rect.x<0:
+        pad.rect.x=0
+    if pad.rect.x+pad.rect.width>bg_x:
+        pad.rect.x=bg_x-pad.rect.width
+    # 將底板的 X 座標設定為滑鼠的 X 座標
     for event in pygame.event.get():  # 取得所有遊戲事件
         # 檢查遊戲中發生的事件
 
@@ -78,5 +125,10 @@ while True:
             sys.exit()  # 結束程式 
             # 結束遊戲程式
 
+    for brick in bricks:
+        # 逐一取得磚塊列表中的磚塊
+
+        brick.draw(screen)
+        # 將每一個磚塊畫到遊戲畫面上
+    pad.draw(screen)
     pygame.display.update()  # 更新畫面
-    # 更新遊戲畫面
