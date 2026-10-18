@@ -88,6 +88,8 @@ class Brick:
 
 
 class ExtraLife:
+    # 額外生命會往下掉，接到底板時增加一條生命
+
     def __init__(self, x, y):
         self.rect = pygame.Rect(x - 10, y - 10, 20, 20)
         self.speed_y = 3
@@ -214,9 +216,6 @@ class Ball:
 
         self.game_over = False
         # 設定遊戲一開始尚未結束
-
-        self.game_win = False
-        # 設定遊戲一開始尚未獲勝
 
         self.paddle_bounce_count = 0
         self.exploding = False
@@ -386,8 +385,22 @@ def add_random_brick(bricks, excluded_position):
 
 
 def maybe_drop_extra_life(brick, life_drops):
-    if random.randint(1, 100) <= 10:
+    if random.randint(1, 100) <= extra_life_drop_percent:
         life_drops.append(ExtraLife(brick.rect.centerx, brick.rect.centery))
+
+
+def update_life_drops(life_drops, pad, current_lives):
+    # 逐一移動道具，接到或掉出畫面後就從清單移除
+    for life_drop in life_drops[:]:
+        life_drop.move()
+        if life_drop.rect.colliderect(pad.rect):
+            if current_lives < max_lives:
+                current_lives += 1
+            life_drops.remove(life_drop)
+        elif life_drop.rect.top > bg_y:
+            life_drops.remove(life_drop)
+
+    return current_lives
 
 
 def all_bricks_hit(bricks):
@@ -535,12 +548,22 @@ bricks_gap = 2
 # 設定磚塊之間的間隔
 # 每個磚塊之間相隔 2 像素
 
-def create_bricks():
+max_bricks_row = 20
+starting_lives = 3
+max_lives = 5
+extra_life_drop_percent = 10
+level = 1
+lives = starting_lives
+life_drops = []
+
+
+def create_bricks(level_number):
     # 建立一組新的磚塊，讓重新開始時可以重新使用
     new_bricks = []
+    current_rows = min(bricks_row + level_number - 1, max_bricks_row)
 
     for col in range(bricks_col):
-        for row in range(bricks_row):
+        for row in range(current_rows):
             x = col * (brick_w + bricks_gap) + 70
             y = row * (brick_h + bricks_gap) + 60
 
@@ -564,14 +587,13 @@ def create_bricks():
     return new_bricks
 
 
-bricks = create_bricks()
+bricks = create_bricks(level)
 # 建立遊戲一開始的磚塊列表
 
 
 ######################顯示文字設定/ text display settings######################
 
-# 這個區域用來設定遊戲中的文字
-# 目前沒有設定文字
+# 這個區域用來設定關卡和生命顯示文字
 
 
 ######################底板設定/ paddle settings######################
@@ -607,13 +629,12 @@ ball = Ball(
 # 使用 ball_color 設定球的顏色
 
 
-######################遊戲結束與獲勝設定/ game over and win settings######################
+######################遊戲結束設定/ game over settings######################
 
 game_over_font = pygame.font.SysFont("Microsoft JhengHei", 48)
 game_over_text = game_over_font.render("遊戲結束", True, (255, 255, 255))
 game_over_rect = game_over_text.get_rect(center=(bg_x // 2, bg_y // 2))
-game_win_text = game_over_font.render("恭喜獲勝！", True, (255, 255, 255))
-game_win_rect = game_win_text.get_rect(center=(bg_x // 2, bg_y // 2))
+game_info_font = pygame.font.SysFont("Microsoft JhengHei", 24)
 
 restart_font = pygame.font.SysFont("Microsoft JhengHei", 30)
 restart_text = restart_font.render("重新開始", True, (255, 255, 255))
@@ -622,10 +643,14 @@ restart_button_rect.center = (bg_x // 2, bg_y // 2 + 80)
 
 
 def reset_game():
-    global bricks, ball, fur_elise_queue, fur_elise_index
+    global bricks, ball, level, lives, life_drops
+    global fur_elise_queue, fur_elise_index
 
+    level = 1
+    lives = starting_lives
     pad.rect.x = bg_x // 2 - pad.rect.width // 2
-    bricks = create_bricks()
+    bricks = create_bricks(level)
+    life_drops = []
     ball = Ball(
         pad.rect.centerx,
         pad.rect.y - ball_radius,
@@ -635,6 +660,35 @@ def reset_game():
     fur_elise_channel.stop()
     fur_elise_queue = []
     fur_elise_index = 0
+
+
+def lose_ball():
+    global ball, lives
+
+    lives -= 1
+    if lives <= 0:
+        ball.game_over = True
+    else:
+        ball = Ball(
+            pad.rect.centerx,
+            pad.rect.y - ball_radius,
+            ball_radius,
+            ball_color
+        )
+
+
+def start_next_level():
+    global level, bricks, ball, life_drops
+
+    level += 1
+    bricks = create_bricks(level)
+    life_drops = []
+    ball = Ball(
+        pad.rect.centerx,
+        pad.rect.y - ball_radius,
+        ball_radius,
+        ball_color
+    )
 
 
 ######################主程式/ main program######################
@@ -653,7 +707,7 @@ while True:
     # 清除背景
     # 使用黑色填滿整個遊戲畫面
 
-    if not ball.game_over and not ball.game_win and not ball.exploding:
+    if not ball.game_over and not ball.exploding:
         mos_x, mos_y = pygame.mouse.get_pos()
         # 取得滑鼠的座標
         # mos_x 是滑鼠目前的 X 座標
@@ -675,6 +729,9 @@ while True:
 
             pad.rect.x = bg_x - pad.rect.width
             # 如果超出右邊，就將底板放回遊戲畫面內
+
+        lives = update_life_drops(life_drops, pad, lives)
+
         if not ball.is_moving:
             # 判斷球是否沒有在移動
             # 如果球沒有在移動，就將球放在底板上方
@@ -687,19 +744,21 @@ while True:
             ball.move()
             # 如果球正在移動，就呼叫 move() 函式讓球移動
 
-            ball.check_collision(bg_x, bg_y, bricks, pad)
+            ball.check_collision(bg_x, bg_y, bricks, pad, life_drops)
             # 呼叫 check_collision() 函式檢查球是否碰到邊界或磚塊
             # bg_x、bg_y 是遊戲畫面的寬度和高度
             # bricks 是磚塊列表
             # pad 是底板物件
+
+            if ball.game_over:
+                lose_ball()
 
             if (
                 not ball.game_over
                 and not ball.exploding
                 and all_bricks_hit(bricks)
             ):
-                ball.game_win = True
-                ball.is_moving = False
+                start_next_level()
 
     # 將球的 Y 座標設定為底板上方
 
@@ -716,13 +775,12 @@ while True:
         if event.type == pygame.MOUSEBUTTONDOWN:
             if (
                 event.button == 1
-                and (ball.game_over or ball.game_win)
+                and ball.game_over
                 and restart_button_rect.collidepoint(event.pos)
             ):
                 reset_game()
             elif (
                 not ball.game_over
-                and not ball.game_win
                 and not ball.exploding
                 and not ball.is_moving
             ):
@@ -735,6 +793,9 @@ while True:
 
         brick.draw(game_surface)
         # 將每一個磚塊畫到遊戲畫面上
+
+    for life_drop in life_drops:
+        life_drop.draw(game_surface)
 
     pad.draw(game_surface)
     # 將底板畫到遊戲畫面上
@@ -749,10 +810,9 @@ while True:
         if explosion_elapsed >= ball.explosion_duration:
             ball.exploding = False
             ball.destroyed = True
-            if all_bricks_hit(bricks):
-                ball.game_win = True
-            else:
-                ball.game_over = True
+            lose_ball()
+            if not ball.game_over and all_bricks_hit(bricks):
+                start_next_level()
         else:
             shake_strength = max(0, 10 - explosion_elapsed // 90)
             shake_x = random.randint(-shake_strength, shake_strength)
@@ -761,12 +821,17 @@ while True:
     screen.fill((0, 0, 0))
     screen.blit(game_surface, (shake_x, shake_y))
 
-    if ball.game_win:
-        screen.blit(game_win_text, game_win_rect)
-    elif ball.game_over:
+    game_info_text = game_info_font.render(
+        f"關卡：{level}　生命：{lives}/{max_lives}",
+        True,
+        (255, 255, 255)
+    )
+    screen.blit(game_info_text, (20, 15))
+
+    if ball.game_over:
         screen.blit(game_over_text, game_over_rect)
 
-    if ball.game_over or ball.game_win:
+    if ball.game_over:
         pygame.draw.rect(screen, (40, 130, 75), restart_button_rect)
         pygame.draw.rect(screen, (255, 255, 255), restart_button_rect, 2)
         restart_text_rect = restart_text.get_rect(center=restart_button_rect.center)
