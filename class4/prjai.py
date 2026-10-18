@@ -393,6 +393,7 @@ def update_life_drops(life_drops, pad, current_lives):
     # 逐一移動道具，接到或掉出畫面後就從清單移除
     for life_drop in life_drops[:]:
         life_drop.move()
+        # colliderect() 用來判斷道具和底板的矩形是否相碰
         if life_drop.rect.colliderect(pad.rect):
             if current_lives < max_lives:
                 current_lives += 1
@@ -549,9 +550,13 @@ bricks_gap = 2
 # 每個磚塊之間相隔 2 像素
 
 max_bricks_row = 20
+# 關卡最多有 20 列磚塊
 starting_lives = 3
+# 遊戲開始時有 3 條生命
 max_lives = 5
+# 額外生命最多累積到 5 條
 extra_life_drop_percent = 10
+# 每顆磚塊有 10% 機率掉落額外生命
 level = 1
 lives = starting_lives
 life_drops = []
