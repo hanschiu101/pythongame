@@ -3,6 +3,8 @@
 import random
 # random 是用來生成隨機數的套件
 
+import array
+import math
 import os
 
 import pygame
@@ -85,6 +87,32 @@ class Brick:
                 )
 
 
+class ExtraLife:
+    def __init__(self, x, y):
+        self.rect = pygame.Rect(x - 10, y - 10, 20, 20)
+        self.speed_y = 3
+
+    def move(self):
+        self.rect.y += self.speed_y
+
+    def draw(self, display_area):
+        pygame.draw.rect(display_area, (35, 190, 90), self.rect)
+        pygame.draw.line(
+            display_area,
+            (255, 255, 255),
+            (self.rect.centerx - 5, self.rect.centery),
+            (self.rect.centerx + 5, self.rect.centery),
+            3
+        )
+        pygame.draw.line(
+            display_area,
+            (255, 255, 255),
+            (self.rect.centerx, self.rect.centery - 5),
+            (self.rect.centerx, self.rect.centery + 5),
+            3
+        )
+
+
 class GorillaPaddle:
     def __init__(self, x, y, width, height):
         self.rect = pygame.Rect(x, y, width, height)
@@ -152,8 +180,10 @@ class GorillaPaddle:
 class Ball:
     # 建立一個球的類別
 
-    max_paddle_bounces = 17
+    max_paddle_bounces = 22
     explosion_duration = 900
+    speed_increase = 0.3
+    max_speed = 12
 
     def __init__(self, x, y, radius, color):
         # 建立球時設定球的資料
@@ -192,7 +222,6 @@ class Ball:
         self.exploding = False
         self.explosion_start = 0
         self.destroyed = False
-        self.visibility_start = None
 
     def draw(self, display_area):
         # 建立繪製球的函式
@@ -227,14 +256,6 @@ class Ball:
                 pygame.draw.line(display_area, (255, 255, 220), start, end, 4)
             return
 
-        if self.visibility_start is not None:
-            # get_ticks() 使用毫秒：前 10 秒隱形，接著 10 秒顯示
-            visibility_elapsed = (
-                pygame.time.get_ticks() - self.visibility_start
-            ) % 20000
-            if visibility_elapsed < 10000:
-                return
-
         pygame.draw.circle(
             display_area,
             self.color,
@@ -258,12 +279,26 @@ class Ball:
             self.y += self.speed_y
             # 將球的 Y 座標加上垂直速度
 
-    def check_collision(self, bg_x, bg_y, bricks,pad):
+    def increase_speed(self):
+        # 用畢氏定理計算球目前的總速度
+        current_speed = math.sqrt(self.speed_x ** 2 + self.speed_y ** 2)
+        if current_speed == 0:
+            return
+
+        new_speed = min(current_speed + self.speed_increase, self.max_speed)
+        # 同比例調整 X、Y 速度，維持球原本的方向
+        speed_scale = new_speed / current_speed
+        self.speed_x *= speed_scale
+        self.speed_y *= speed_scale
+
+    def check_collision(self, bg_x, bg_y, bricks, pad, life_drops):
         # 建立碰撞檢查球的函式
         if self.x - self.radius <= 0 or self.x + self.radius >= bg_x:
             self.speed_x = -self.speed_x
+            self.increase_speed()
         if self.y-self.radius<=0:
             self.speed_y=-self.speed_y
+            self.increase_speed()
         if (
             self.speed_y > 0
             and self.y + self.radius >= pad.rect.y
@@ -272,6 +307,7 @@ class Ball:
             and self.x - self.radius <= pad.rect.x + pad.rect.width
         ):
             self.speed_y=-abs(self.speed_y)
+            self.increase_speed()
             self.paddle_bounce_count += 1
             if self.paddle_bounce_count > self.max_paddle_bounces:
                 self.exploding = True
@@ -292,10 +328,15 @@ class Ball:
                 ):
                     brick.hit = True
 
+                    play_next_fur_elise_note()
+
+                    maybe_drop_extra_life(brick, life_drops)
+
                     if self.x < brick.rect.x or self.x > brick.rect.x + brick.rect.width:
                         self.speed_x = -self.speed_x
                     else:
                         self.speed_y = -self.speed_y
+                    self.increase_speed()
 
                     if brick.kind == "explosive":
                         for nearby_brick in bricks:
@@ -306,6 +347,7 @@ class Ball:
                                 and abs(nearby_brick.rect.y - brick.rect.y) <= brick_h + bricks_gap
                             ):
                                 nearby_brick.hit = True
+                                maybe_drop_extra_life(nearby_brick, life_drops)
                     elif brick.kind == "add":
                         add_random_brick(bricks, (brick.rect.x, brick.rect.y))
 
@@ -314,7 +356,8 @@ def add_random_brick(bricks, excluded_position):
     available_positions = []
 
     for col in range(bricks_col):
-        for row in range(bricks_row + 3):
+        current_rows = min(bricks_row + level - 1, max_bricks_row)
+        for row in range(current_rows + 3):
             # 多預留三列空間，讓新方塊有位置可以生成
             x = col * (brick_w + bricks_gap) + 70
             y = row * (brick_h + bricks_gap) + 60
@@ -342,6 +385,11 @@ def add_random_brick(bricks, excluded_position):
         print("沒有空位可以新增方塊")
 
 
+def maybe_drop_extra_life(brick, life_drops):
+    if random.randint(1, 100) <= 10:
+        life_drops.append(ExtraLife(brick.rect.centerx, brick.rect.centery))
+
+
 def all_bricks_hit(bricks):
     # return 會把檢查結果傳回呼叫這個函式的位置
     # 逐一檢查磚塊，找出還沒被打中的磚塊
@@ -352,6 +400,43 @@ def all_bricks_hit(bricks):
     return True
 
 
+def create_note_sound(frequency, duration):
+    # 用 sin 波形產生一個音符，再轉成 pygame 可以播放的聲音
+    sample_rate = 44100
+    sample_count = int(sample_rate * duration)
+    samples = array.array("h")
+
+    for sample_number in range(sample_count):
+        fade_in = min(sample_number / 100, 1)
+        fade_out = min((sample_count - sample_number) / 1000, 1)
+        volume = min(fade_in, fade_out)
+        wave = math.sin(
+            2 * math.pi * frequency * sample_number / sample_rate
+        )
+        samples.append(int(32767 * 0.25 * volume * wave))
+
+    return pygame.mixer.Sound(buffer=samples.tobytes())
+
+
+def play_next_fur_elise_note():
+    # 取得下一個音符；若上一個音符還在播放，就先放進佇列
+    global fur_elise_index
+
+    note = fur_elise_notes[fur_elise_index]
+    if fur_elise_channel.get_busy():
+        fur_elise_queue.append(note)
+    else:
+        fur_elise_channel.play(note)
+
+    fur_elise_index = (fur_elise_index + 1) % len(fur_elise_notes)
+
+
+def update_fur_elise_music():
+    # 播完目前音符後，接著播放佇列中的音符
+    if not fur_elise_channel.get_busy() and fur_elise_queue:
+        fur_elise_channel.play(fur_elise_queue.pop(0))
+
+
 ######################定義函式區/ define functions######################
 
 # 這個區域用來放置其他需要使用的函式
@@ -359,6 +444,9 @@ def all_bricks_hit(bricks):
 
 
 ######################初始化設定/ initialize settings######################
+
+pygame.mixer.pre_init(44100, -16, 1, 512)
+# 設定音效格式，必須在 pygame.init() 之前呼叫
 
 pygame.init()
 # 開始使用 pygame 的功能
@@ -372,6 +460,33 @@ FPS = pygame.time.Clock()
 
 # 這個區域用來載入遊戲需要的圖片
 # 目前沒有使用圖片
+
+
+######################音樂設定/ music settings######################
+
+fur_elise_frequencies = {
+    "E5": 659.25,
+    "D#5": 622.25,
+    "B4": 493.88,
+    "D5": 587.33,
+    "C5": 523.25,
+    "A4": 440.00,
+    "C4": 261.63,
+    "E4": 329.63,
+    "G#4": 415.30
+}
+fur_elise_sequence = [
+    "E5", "D#5", "E5", "D#5", "E5", "B4", "D5", "C5", "A4",
+    "C4", "E4", "A4", "B4", "E4", "G#4", "B4", "C5",
+    "E5", "D#5", "E5", "D#5", "E5", "B4", "D5", "C5", "A4"
+]
+fur_elise_notes = [
+    create_note_sound(fur_elise_frequencies[note], 0.16)
+    for note in fur_elise_sequence
+]
+fur_elise_channel = pygame.mixer.Channel(0)
+fur_elise_queue = []
+fur_elise_index = 0
 
 
 ######################遊戲視窗設定/ game window settings######################
@@ -420,46 +535,37 @@ bricks_gap = 2
 # 設定磚塊之間的間隔
 # 每個磚塊之間相隔 2 像素
 
-bricks = []
-# 建立空的磚塊列表，用來存放磚塊
+def create_bricks():
+    # 建立一組新的磚塊，讓重新開始時可以重新使用
+    new_bricks = []
 
-for col in range(bricks_col):
-    # 依照磚塊的行數重複執行
-    # 這裡會執行 11 次
+    for col in range(bricks_col):
+        for row in range(bricks_row):
+            x = col * (brick_w + bricks_gap) + 70
+            y = row * (brick_h + bricks_gap) + 60
 
-    for row in range(bricks_row):
-        # 依照磚塊的列數重複執行
-        # 每一次會執行 9 次
+            kind = "normal"
+            if col == 2 and row == 1:
+                kind = "explosive"
+                color = (230, 65, 45)
+            elif col == 7 and row == 1:
+                kind = "add"
+                color = (45, 170, 70)
+            else:
+                color = (
+                    random.randint(20, 255),
+                    random.randint(0, 255),
+                    random.randint(0, 255)
+                )
 
-        x = col * (brick_w + bricks_gap) + 70
-        # 計算每個磚塊的 X 座標
-        # col 越大，磚塊的位置越往右
+            brick = Brick(x, y, brick_w, brick_h, color, kind)
+            new_bricks.append(brick)
 
-        y = row * (brick_h + bricks_gap) + 60
-        # 計算每個磚塊的 Y 座標
-        # row 越大，磚塊的位置越往下
+    return new_bricks
 
-        kind = "normal"
-        if col == 2 and row == 1:
-            kind = "explosive"
-            color = (230, 65, 45)
-        elif col == 7 and row == 1:
-            kind = "add"
-            color = (45, 170, 70)
-        else:
-            color = (
-                random.randint(20, 255),
-                random.randint(0, 255),
-                random.randint(0, 255)
-            )
-            # 隨機產生一般磚塊的顏色
 
-        # 建立一個磚塊物件
-        # 使用計算好的位置、大小、顏色和種類
-        brick = Brick(x, y, brick_w, brick_h, color, kind)
-
-        bricks.append(brick)
-        # 將建立好的磚塊加入磚塊列表
+bricks = create_bricks()
+# 建立遊戲一開始的磚塊列表
 
 
 ######################顯示文字設定/ text display settings######################
@@ -509,6 +615,27 @@ game_over_rect = game_over_text.get_rect(center=(bg_x // 2, bg_y // 2))
 game_win_text = game_over_font.render("恭喜獲勝！", True, (255, 255, 255))
 game_win_rect = game_win_text.get_rect(center=(bg_x // 2, bg_y // 2))
 
+restart_font = pygame.font.SysFont("Microsoft JhengHei", 30)
+restart_text = restart_font.render("重新開始", True, (255, 255, 255))
+restart_button_rect = pygame.Rect(0, 0, 220, 54)
+restart_button_rect.center = (bg_x // 2, bg_y // 2 + 80)
+
+
+def reset_game():
+    global bricks, ball, fur_elise_queue, fur_elise_index
+
+    pad.rect.x = bg_x // 2 - pad.rect.width // 2
+    bricks = create_bricks()
+    ball = Ball(
+        pad.rect.centerx,
+        pad.rect.y - ball_radius,
+        ball_radius,
+        ball_color
+    )
+    fur_elise_channel.stop()
+    fur_elise_queue = []
+    fur_elise_index = 0
+
 
 ######################主程式/ main program######################
 
@@ -519,6 +646,8 @@ while True:
     FPS.tick(60)
     # 控制遊戲速度
     # 遊戲最多每秒執行 60 次
+
+    update_fur_elise_music()
 
     game_surface.fill((0, 0, 0))
     # 清除背景
@@ -584,22 +713,21 @@ while True:
 
             sys.exit()
             # 結束遊戲程式
-        if (
-            event.type == pygame.MOUSEBUTTONDOWN
-            and not ball.game_over
-            and not ball.game_win
-            and not ball.exploding
-        ):
-            # 判斷是否按下滑鼠按鈕
-
-            if not ball.is_moving:
-                # 判斷球是否沒有在移動
-                # 如果球沒有在移動，就讓球開始移動
-
-                ball.is_moving=True
-                # 將球的 is_moving 設定為 True
-                # 讓球開始移動  
-                ball.visibility_start = pygame.time.get_ticks()
+        if event.type == pygame.MOUSEBUTTONDOWN:
+            if (
+                event.button == 1
+                and (ball.game_over or ball.game_win)
+                and restart_button_rect.collidepoint(event.pos)
+            ):
+                reset_game()
+            elif (
+                not ball.game_over
+                and not ball.game_win
+                and not ball.exploding
+                and not ball.is_moving
+            ):
+                # 判斷是否按下滑鼠按鈕，讓球開始移動
+                ball.is_moving = True
 
     for brick in bricks:
         # 逐一取得磚塊列表中的磚塊
@@ -637,6 +765,12 @@ while True:
         screen.blit(game_win_text, game_win_rect)
     elif ball.game_over:
         screen.blit(game_over_text, game_over_rect)
+
+    if ball.game_over or ball.game_win:
+        pygame.draw.rect(screen, (40, 130, 75), restart_button_rect)
+        pygame.draw.rect(screen, (255, 255, 255), restart_button_rect, 2)
+        restart_text_rect = restart_text.get_rect(center=restart_button_rect.center)
+        screen.blit(restart_text, restart_text_rect)
 
     pygame.display.update()
     # 更新遊戲視窗
