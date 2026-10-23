@@ -5,7 +5,6 @@ import random
 
 import array
 import math
-import os
 
 import pygame
 # pygame 是製作遊戲和多媒體程式的套件
@@ -85,6 +84,20 @@ class Brick:
                     (center_x, center_y + 5),
                     3
                 )
+            elif self.kind == "invisible":
+                pygame.draw.ellipse(
+                    display_area,
+                    (255, 255, 255),
+                    (center_x - 8, center_y - 5, 16, 10),
+                    2
+                )
+                pygame.draw.line(
+                    display_area,
+                    (255, 255, 255),
+                    (center_x - 7, center_y + 6),
+                    (center_x + 7, center_y - 6),
+                    2
+                )
 
 
 class ExtraLife:
@@ -115,68 +128,73 @@ class ExtraLife:
         )
 
 
-class GorillaPaddle:
+class PigPaddle:
     def __init__(self, x, y, width, height):
         self.rect = pygame.Rect(x, y, width, height)
-        image_path = os.path.join(
-            os.path.dirname(__file__),
-            "assets",
-            "kenney-monkey.png"
-        )
-        original_image = pygame.image.load(image_path).convert_alpha()
-        image_height = height - 8
-        image_width = round(
-            image_height * original_image.get_width() / original_image.get_height()
-        )
-        self.image = pygame.transform.smoothscale(
-            original_image,
-            (image_width, image_height)
-        )
+        self.mouth_open_until = 0
+
+    def open_mouth(self):
+        self.mouth_open_until = pygame.time.get_ticks() + 350
 
     def draw(self, display_area):
         y = self.rect.y
         center_x = self.rect.centerx
 
-        headphone_color = (35, 35, 45)
-        pygame.draw.line(
-            display_area,
-            headphone_color,
-            (center_x - 31, y + 24),
-            (center_x - 29, y + 12),
-            6
+        ear_color = (230, 120, 145)
+        inner_ear_color = (255, 180, 195)
+        face_color = (255, 165, 185)
+        outline_color = (145, 70, 85)
+
+        pygame.draw.ellipse(
+            display_area, outline_color, (center_x - 34, y + 5, 23, 29)
         )
-        pygame.draw.line(
-            display_area,
-            headphone_color,
-            (center_x - 29, y + 12),
-            (center_x, y + 5),
-            6
+        pygame.draw.ellipse(
+            display_area, outline_color, (center_x + 11, y + 5, 23, 29)
         )
-        pygame.draw.line(
-            display_area,
-            headphone_color,
-            (center_x, y + 5),
-            (center_x + 29, y + 12),
-            6
+        pygame.draw.ellipse(
+            display_area, ear_color, (center_x - 32, y + 7, 19, 25)
         )
-        pygame.draw.line(
-            display_area,
-            headphone_color,
-            (center_x + 29, y + 12),
-            (center_x + 31, y + 24),
-            6
+        pygame.draw.ellipse(
+            display_area, ear_color, (center_x + 13, y + 7, 19, 25)
+        )
+        pygame.draw.ellipse(
+            display_area, inner_ear_color, (center_x - 28, y + 11, 10, 16)
+        )
+        pygame.draw.ellipse(
+            display_area, inner_ear_color, (center_x + 18, y + 11, 10, 16)
         )
 
-        image_x = center_x - self.image.get_width() // 2
-        image_y = y + self.rect.height - self.image.get_height()
-        display_area.blit(self.image, (image_x, image_y))
+        pygame.draw.ellipse(
+            display_area, outline_color, (center_x - 41, y + 15, 82, 49)
+        )
+        pygame.draw.ellipse(
+            display_area, face_color, (center_x - 39, y + 17, 78, 45)
+        )
 
-        for ear_x, accent_color in (
-            (center_x - 34, (55, 210, 240)),
-            (center_x + 34, (240, 80, 180))
-        ):
-            pygame.draw.circle(display_area, headphone_color, (ear_x, y + 25), 11)
-            pygame.draw.circle(display_area, accent_color, (ear_x, y + 25), 6)
+        for eye_x in (center_x - 15, center_x + 15):
+            pygame.draw.circle(display_area, (45, 35, 40), (eye_x, y + 32), 3)
+            pygame.draw.circle(display_area, (255, 255, 255), (eye_x - 1, y + 31), 1)
+
+        pygame.draw.ellipse(
+            display_area, (235, 115, 145), (center_x - 16, y + 39, 32, 20)
+        )
+        for nostril_x in (center_x - 6, center_x + 6):
+            pygame.draw.ellipse(
+                display_area, outline_color, (nostril_x - 2, y + 45, 4, 7)
+            )
+
+        if pygame.time.get_ticks() < self.mouth_open_until:
+            pygame.draw.ellipse(
+                display_area, outline_color, (center_x - 8, y + 54, 16, 9)
+            )
+            pygame.draw.ellipse(
+                display_area, (235, 95, 125), (center_x - 4, y + 59, 8, 3)
+            )
+        else:
+            pygame.draw.line(
+                display_area, outline_color,
+                (center_x - 5, y + 60), (center_x + 5, y + 60), 2
+            )
 
 
 class Ball:
@@ -221,6 +239,7 @@ class Ball:
         self.exploding = False
         self.explosion_start = 0
         self.destroyed = False
+        self.invisible_until = 0
 
     def draw(self, display_area):
         # 建立繪製球的函式
@@ -253,6 +272,9 @@ class Ball:
                     center[1] + direction_y * (radius + 20)
                 )
                 pygame.draw.line(display_area, (255, 255, 220), start, end, 4)
+            return
+
+        if pygame.time.get_ticks() < self.invisible_until:
             return
 
         pygame.draw.circle(
@@ -305,6 +327,7 @@ class Ball:
             and self.x + self.radius >= pad.rect.x
             and self.x - self.radius <= pad.rect.x + pad.rect.width
         ):
+            pad.open_mouth()
             self.speed_y=-abs(self.speed_y)
             self.increase_speed()
             self.paddle_bounce_count += 1
@@ -349,6 +372,8 @@ class Ball:
                                 maybe_drop_extra_life(nearby_brick, life_drops)
                     elif brick.kind == "add":
                         add_random_brick(bricks, (brick.rect.x, brick.rect.y))
+                    elif brick.kind == "invisible":
+                        self.invisible_until = pygame.time.get_ticks() + 2000
 
 
 def add_random_brick(bricks, excluded_position):
@@ -551,6 +576,10 @@ bricks_gap = 2
 
 max_bricks_row = 20
 # 關卡最多有 20 列磚塊
+special_bricks_min = 1
+# 每一關最少有 1 個特殊方塊
+special_bricks_max = 4
+# 每一關最多有 4 個特殊方塊
 starting_lives = 3
 # 遊戲開始時有 3 條生命
 max_lives = 5
@@ -573,21 +602,31 @@ def create_bricks(level_number):
             y = row * (brick_h + bricks_gap) + 60
 
             kind = "normal"
-            if col == 2 and row == 1:
-                kind = "explosive"
-                color = (230, 65, 45)
-            elif col == 7 and row == 1:
-                kind = "add"
-                color = (45, 170, 70)
-            else:
-                color = (
-                    random.randint(20, 255),
-                    random.randint(0, 255),
-                    random.randint(0, 255)
-                )
+            color = (
+                random.randint(20, 255),
+                random.randint(0, 255),
+                random.randint(0, 255)
+            )
 
             brick = Brick(x, y, brick_w, brick_h, color, kind)
             new_bricks.append(brick)
+
+    special_count = random.randint(special_bricks_min, special_bricks_max)
+    # 隨機決定這一關特殊方塊的數量
+    special_bricks = random.sample(new_bricks, special_count)
+    # 從磚塊中隨機挑選不重複的方塊作為特殊方塊
+    special_kinds = ["explosive", "add", "invisible"]
+
+    for brick in special_bricks:
+        # 隨機安排爆炸、增加方塊或讓球隱形的特殊方塊
+        brick.kind = random.choice(special_kinds)
+
+        if brick.kind == "explosive":
+            brick.color = (230, 65, 45)
+        elif brick.kind == "add":
+            brick.color = (45, 170, 70)
+        else:
+            brick.color = (55, 130, 220)
 
     return new_bricks
 
@@ -605,10 +644,9 @@ bricks = create_bricks(level)
 
 pad_w = 112
 pad_h = 64
-pad = GorillaPaddle(bg_x // 2 - pad_w // 2, bg_y - pad_h - 12, pad_w, pad_h)
+pad = PigPaddle(bg_x // 2 - pad_w // 2, bg_y - pad_h - 12, pad_w, pad_h)
 # 建立遊戲中的底板
-# 使用 Brick 類別建立底板
-# 底板的顏色是白色
+# 使用 PigPaddle 類別繪製豬的角色
 
 
 ######################球設定/ ball settings######################
