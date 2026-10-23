@@ -314,6 +314,8 @@ class Ball:
 
     def check_collision(self, bg_x, bg_y, bricks, pad, life_drops):
         # 建立碰撞檢查球的函式
+        hit_count = 0
+
         if self.x - self.radius <= 0 or self.x + self.radius >= bg_x:
             self.speed_x = -self.speed_x
             self.increase_speed()
@@ -335,7 +337,7 @@ class Ball:
                 self.exploding = True
                 self.explosion_start = pygame.time.get_ticks()
                 self.is_moving = False
-                return
+                return hit_count
         elif self.y + self.radius >= bg_y:
             self.game_over = True
             self.is_moving = False
@@ -349,6 +351,7 @@ class Ball:
                     and dy <= self.radius + brick.rect.height / 2
                 ):
                     brick.hit = True
+                    hit_count += 1
 
                     play_next_fur_elise_note()
 
@@ -369,11 +372,14 @@ class Ball:
                                 and abs(nearby_brick.rect.y - brick.rect.y) <= brick_h + bricks_gap
                             ):
                                 nearby_brick.hit = True
+                                hit_count += 1
                                 maybe_drop_extra_life(nearby_brick, life_drops)
                     elif brick.kind == "add":
                         add_random_brick(bricks, (brick.rect.x, brick.rect.y))
                     elif brick.kind == "invisible":
                         self.invisible_until = pygame.time.get_ticks() + 2000
+
+        return hit_count
 
 
 def add_random_brick(bricks, excluded_position):
@@ -589,6 +595,29 @@ extra_life_drop_percent = 10
 level = 1
 lives = starting_lives
 life_drops = []
+score = 0
+combo = 0
+last_brick_hit_time = 0
+combo_window_ms = 2000
+combo_max_multiplier = 5
+
+
+def award_brick_score(brick_hits):
+    global score, combo, last_brick_hit_time
+
+    if brick_hits == 0:
+        return
+
+    current_time = pygame.time.get_ticks()
+    if current_time - last_brick_hit_time > combo_window_ms:
+        combo = 0
+
+    for _ in range(brick_hits):
+        combo += 1
+        multiplier = min(combo, combo_max_multiplier)
+        score += 10 * multiplier
+
+    last_brick_hit_time = current_time
 
 
 def create_bricks(level_number):
@@ -688,9 +717,13 @@ restart_button_rect.center = (bg_x // 2, bg_y // 2 + 80)
 def reset_game():
     global bricks, ball, level, lives, life_drops
     global fur_elise_queue, fur_elise_index
+    global score, combo, last_brick_hit_time
 
     level = 1
     lives = starting_lives
+    score = 0
+    combo = 0
+    last_brick_hit_time = 0
     pad.rect.x = bg_x // 2 - pad.rect.width // 2
     bricks = create_bricks(level)
     life_drops = []
@@ -706,9 +739,11 @@ def reset_game():
 
 
 def lose_ball():
-    global ball, lives
+    global ball, lives, combo, last_brick_hit_time
 
     lives -= 1
+    combo = 0
+    last_brick_hit_time = 0
     if lives <= 0:
         ball.game_over = True
     else:
@@ -745,6 +780,9 @@ while True:
     # 遊戲最多每秒執行 60 次
 
     update_fur_elise_music()
+
+    if combo > 0 and pygame.time.get_ticks() - last_brick_hit_time > combo_window_ms:
+        combo = 0
 
     game_surface.fill((0, 0, 0))
     # 清除背景
@@ -787,7 +825,8 @@ while True:
             ball.move()
             # 如果球正在移動，就呼叫 move() 函式讓球移動
 
-            ball.check_collision(bg_x, bg_y, bricks, pad, life_drops)
+            brick_hits = ball.check_collision(bg_x, bg_y, bricks, pad, life_drops)
+            award_brick_score(brick_hits)
             # 呼叫 check_collision() 函式檢查球是否碰到邊界或磚塊
             # bg_x、bg_y 是遊戲畫面的寬度和高度
             # bricks 是磚塊列表
@@ -865,11 +904,19 @@ while True:
     screen.blit(game_surface, (shake_x, shake_y))
 
     game_info_text = game_info_font.render(
-        f"關卡：{level}　生命：{lives}/{max_lives}",
+        f"關卡：{level}　生命：{lives}/{max_lives}　分數：{score}",
         True,
         (255, 255, 255)
     )
     screen.blit(game_info_text, (20, 15))
+
+    if combo > 1:
+        combo_text = game_info_font.render(
+            f"連擊：{combo}（倍率 x{min(combo, combo_max_multiplier)}）",
+            True,
+            (255, 220, 70)
+        )
+        screen.blit(combo_text, (20, 45))
 
     if ball.game_over:
         screen.blit(game_over_text, game_over_rect)
