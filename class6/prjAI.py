@@ -110,10 +110,22 @@ bridge_blocks = 0
 last_block_time = 0
 block_cooldown = 350
 mc_bridge_y = 0
-mc_forward_speed = 2
-mc_distance = 0
-mc_lane = 0
-mc_blocks = []
+mc_world_blocks = {}
+mc_state_stack = []
+mc_player_x = 0.0
+mc_hotbar = {
+    1: "羊毛塊 (∞)",
+    2: "橡木方塊 (∞)",
+    3: "鑽石稿",
+    4: "空手",
+    5: "空手",
+    6: "空手",
+    7: "空手",
+    8: "空手",
+    9: "空手",
+}
+mc_selected_slot = 1
+mc_message = ""
 current_mode = "jump"
 game_started = False
 mc_start_time = 0
@@ -151,14 +163,17 @@ def create_platforms(mode):
 
 
 def respawn():
-    global mc_distance, mc_lane, mc_blocks
+    global mc_world_blocks, mc_state_stack, mc_player_x
+    global mc_selected_slot, mc_message
     player.rect.x = (bg_x - player_w) // 2
     player.rect.y = bg_y - player_h - 50
     player.velocity_y = 0
     player.on_platform = False
-    mc_distance = 0
-    mc_lane = 0
-    mc_blocks = []
+    mc_world_blocks = {(0, 0, 0): "基石方塊"}
+    mc_state_stack = [("站立", 1.62, 4.3, False)]
+    mc_player_x = 0.0
+    mc_selected_slot = 1
+    mc_message = "模擬器啟動成功！請按住 S 開始搭橋"
 
 
 def start_game(mode):
@@ -175,55 +190,73 @@ def start_game(mode):
     mc_start_time = pygame.time.get_ticks()
 
 
-def place_bridge_block():
-    global bridge_blocks, last_block_time, score, mc_blocks
+def update_mc_movement():
+    global mc_player_x, mc_message, game_started
 
-    current_time = pygame.time.get_ticks()
-    if current_time - last_block_time < block_cooldown:
-        return
+    state_name, _, speed, anti_fall = mc_state_stack[-1]
+    move_distance = speed * 0.15
+    next_x = mc_player_x + move_distance
+    current_block_index = int(mc_player_x)
+    next_block_index = int(next_x)
 
-    keys = pygame.key.get_pressed()
-    lane = mc_lane
-    if keys[pygame.K_a] or keys[pygame.K_LEFT]:
-        lane = max(-2, lane - 1)
-    if keys[pygame.K_d] or keys[pygame.K_RIGHT]:
-        lane = min(2, lane + 1)
-    block_position = (mc_distance + 1, lane)
-    if block_position in mc_blocks:
-        return
-    mc_blocks.append(block_position)
-    bridge_blocks += 1
-    score += 1
-    last_block_time = current_time
+    if next_block_index > current_block_index:
+        if (next_block_index, 0, 0) not in mc_world_blocks:
+            if anti_fall:
+                mc_player_x = float(current_block_index) + 0.95
+                mc_message = "Shift 防墜保護：你停在方塊邊緣"
+                return
+            mc_message = "你在站立狀態踩空，請按重生重新開始"
+            game_started = False
+            return
+
+    mc_player_x = next_x
+    target_block = int(mc_player_x + 1.0)
+    current_item = mc_hotbar[mc_selected_slot]
+    if (target_block, 0, 0) not in mc_world_blocks:
+        if "塊" in current_item:
+            mc_world_blocks[(target_block, 0, 0)] = current_item
+            mc_message = f"成功在身後生成方塊 ({target_block}, 0, 0)"
+        else:
+            mc_message = f"放置失敗：手上拿著「{current_item}」"
+    else:
+        mc_message = f"目前狀態：{state_name}"
 
 
 def draw_mc_view():
     screen.fill((115, 190, 235))
-    pygame.draw.rect(screen, (80, 175, 85), (0, bg_y // 2, bg_x, bg_y // 2))
     horizon_y = bg_y // 2
+    pygame.draw.rect(screen, (35, 40, 65), (0, horizon_y, bg_x, bg_y // 2))
+    center_x = bg_x // 2
 
-    for distance, lane in mc_blocks:
-        relative_distance = distance - mc_distance
-        if -8 <= relative_distance <= 12:
-            depth = max(0, relative_distance / 12)
-            block_y = horizon_y + int((1 - depth) * 210)
-            block_width = int(38 + (1 - depth) * 58)
-            block_height = max(8, int(8 + (1 - depth) * 14))
-            block_x = bg_x // 2 + lane * 42 - block_width // 2
-            pygame.draw.rect(
-                screen,
-                (150, 95, 45),
-                (block_x, block_y, block_width, block_height)
-            )
-            pygame.draw.rect(
-                screen,
-                (90, 55, 30),
-                (block_x, block_y, block_width, block_height),
-                2
-            )
+    for (block_x, _, _), block_name in mc_world_blocks.items():
+        relative_x = block_x - mc_player_x
+        if -5 <= relative_x <= 12:
+            screen_x = center_x + int(relative_x * 32)
+            depth = max(0.35, 1 - max(relative_x, 0) / 14)
+            width = max(16, int(48 * depth))
+            height = max(10, int(24 * depth))
+            block_y = horizon_y + int(120 * (1 - depth))
+            block_rect = pygame.Rect(screen_x - width // 2, block_y, width, height)
+            color = (80, 80, 80) if block_name == "基石方塊" else (150, 95, 45)
+            pygame.draw.rect(screen, color, block_rect)
+            pygame.draw.rect(screen, (45, 35, 25), block_rect, 2)
 
-    pygame.draw.line(screen, (255, 255, 255), (bg_x // 2 - 10, horizon_y), (bg_x // 2 + 10, horizon_y), 2)
-    pygame.draw.line(screen, (255, 255, 255), (bg_x // 2, horizon_y - 10), (bg_x // 2, horizon_y + 10), 2)
+    player_y = horizon_y - 45
+    pygame.draw.rect(screen, (0, 220, 80), (center_x - 12, player_y, 24, 40))
+    pygame.draw.circle(screen, (255, 220, 170), (center_x, player_y - 8), 11)
+
+
+def draw_mc_hotbar():
+    slot_width = 40
+    start_x = (bg_x - slot_width * 9) // 2
+    y = bg_y - 88
+    for slot in range(1, 10):
+        rect = pygame.Rect(start_x + (slot - 1) * slot_width, y, slot_width, 38)
+        color = (230, 190, 50) if slot == mc_selected_slot else (70, 70, 80)
+        pygame.draw.rect(screen, color, rect)
+        pygame.draw.rect(screen, (255, 255, 255), rect, 2)
+        slot_text = game_font.render(str(slot), True, (255, 255, 255))
+        screen.blit(slot_text, slot_text.get_rect(center=rect.center))
 
 
 def draw_button(button, text, color):
@@ -238,7 +271,7 @@ def draw_menu():
     title = title_font.render("遊戲模式選擇", True, (255, 255, 255))
     screen.blit(title, title.get_rect(center=(bg_x // 2, 135)))
     draw_button(menu_jump_button, "跳台冒險", (40, 120, 70))
-    draw_button(menu_mc_button, "MC 速建練習場", (120, 75, 35))
+    draw_button(menu_mc_button, "MC", (120, 75, 35))
     draw_button(menu_exit_button, "離開遊戲", (130, 45, 45))
 
 
@@ -284,6 +317,13 @@ while True:
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             sys.exit()
+        if event.type == pygame.KEYDOWN and game_started:
+            if event.key == pygame.K_ESCAPE:
+                game_started = False
+                current_mode = "jump"
+            elif current_mode == "mc" and pygame.K_1 <= event.key <= pygame.K_9:
+                mc_selected_slot = event.key - pygame.K_0
+                mc_message = f"手持格已切換到 Slot {mc_selected_slot}"
         if event.type == pygame.MOUSEBUTTONDOWN:
             if not game_started:
                 if menu_jump_button.collidepoint(event.pos):
@@ -294,14 +334,6 @@ while True:
                     sys.exit()
             elif respawn_button.collidepoint(event.pos):
                 respawn()
-        if (
-            event.type == pygame.KEYDOWN
-            and event.key == pygame.K_SPACE
-            and game_started
-            and current_mode == "mc"
-        ):
-            place_bridge_block()
-
     if not game_started:
         draw_menu()
         pygame.display.update()
@@ -309,34 +341,47 @@ while True:
 
     if current_mode == "mc":
         keys = pygame.key.get_pressed()
-        if keys[pygame.K_s] or keys[pygame.K_DOWN]:
-            mc_distance += 1
-        if keys[pygame.K_a] or keys[pygame.K_LEFT]:
-            mc_lane = max(-2, mc_lane - 1)
-        if keys[pygame.K_d] or keys[pygame.K_RIGHT]:
-            mc_lane = min(2, mc_lane + 1)
+        crouching = keys[pygame.K_LSHIFT] or keys[pygame.K_RSHIFT]
+        if crouching and mc_state_stack[-1][0] != "蹲下":
+            mc_state_stack.append(("蹲下", 1.50, 1.3, True))
+            mc_message = "按住 Shift 進入蹲下姿態"
+        elif not crouching and len(mc_state_stack) > 1:
+            mc_state_stack.pop()
+            mc_message = "放開 Shift 恢復站立"
+        if keys[pygame.K_s]:
+            update_mc_movement()
 
         draw_mc_view()
-        draw_button(respawn_button, "重生", (45, 100, 150))
-        score_text = game_font.render(
-            f"速疊方塊：{bridge_blocks}",
+        state_name, camera_height, _, anti_fall = mc_state_stack[-1]
+        status_text = game_font.render(
+            f"狀態：{state_name}  防墜：{'ON' if anti_fall else 'OFF'}",
             True,
             (255, 255, 255)
         )
-        screen.blit(score_text, (10, 10))
+        screen.blit(status_text, (10, 10))
+        position_text = game_font.render(
+            f"X：{mc_player_x:.2f}  相機高度：{1.0 + camera_height:.2f}m",
+            True,
+            (255, 255, 255)
+        )
+        screen.blit(position_text, (10, 42))
         elapsed = (pygame.time.get_ticks() - mc_start_time) // 1000
         mode_text = game_font.render(
-            f"第一人稱倒退速疊　距離：{mc_distance}　時間：{elapsed}秒",
+            f"MC 速疊　時間：{elapsed}秒　方塊：{len(mc_world_blocks) - 1}",
             True,
             (255, 255, 255)
         )
-        screen.blit(mode_text, (10, 42))
+        screen.blit(mode_text, (10, 74))
         help_text = game_font.render(
-            "S/↓ 倒退　A/D 左右調整　空白鍵在身後放方塊",
+            "按住 S 移動並放方塊　Shift 蹲下防墜　數字鍵切換　Esc 返回",
             True,
             (255, 220, 100)
         )
-        screen.blit(help_text, (10, 72))
+        screen.blit(help_text, (10, 106))
+        message_text = game_font.render(mc_message, True, (255, 230, 150))
+        screen.blit(message_text, (10, 138))
+        draw_mc_hotbar()
+        draw_button(respawn_button, "重生", (45, 100, 150))
         pygame.display.update()
         continue
 
