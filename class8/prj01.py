@@ -215,7 +215,12 @@ def reset_game():
     for i in range(platform_count - 1):
         x = random.randint(0, bg_x - platform_w)  # 隨機生成平台的 x 座標
         y = (bg_y - 100) - (i * 60)
-        platform = Platform(x, y, platform_w, platform_h, (255, 255, 255))
+        if score > 100 and random.random() < special_platform_chance:
+            platform = Platform(
+                x, y, platform_w, platform_h, (255, 0, 0), is_special=True
+            )
+        else:
+            platform = Platform(x, y, platform_w, platform_h, (255, 255, 255))
         platforms.append(platform)  # 將平台物件加入平台列表
     if random.random() < spring_chance:  # 根據彈簧出現的機率決定是否生成彈簧
         spring_w = 20
