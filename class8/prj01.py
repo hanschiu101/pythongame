@@ -15,6 +15,37 @@ special_platform_chance = 0.2  # 記錄特殊平台出現的機率
 springs = []  # 記錄彈簧物件的列表
 
 
+###################### 定義函式 ######################
+def load_doodle_sprites():
+    img_path = os.path.join("images", "src.png")
+    source_image = pygame.image.load(img_path).convert_alpha()
+    sprite_data = {
+        "std_platform": (0, 0, 116, 10),
+        "break_platform": (0, 145, 124, 33),
+        "spring_normal": (376, 188, 71, 35),
+        "player_left_jumping": os.path.join("image", "l.png"),
+        "player_left_jumping": os.path.join("image", "ls.png"),
+        "player_right_jumping": os.path.join("image", "r.png"),
+        "player_right_jumping": os.path.join("image", "rs.png"),
+    }
+    sprites = {}
+    for name, data in sprite_data.items():
+        if name.startswith("player_"):
+            try:
+                sprites[name] = pygame.image.load(data).convert_alpha()
+            except Exception as e:
+                print(f"Error loading image {data}: {e}")
+        else:
+            try:
+                x, y, width, height = data
+                sprites[name] = source_image.subsurface(
+                    pygame.Rect(x, y, width, height)
+                )
+            except ValueError as e:
+                print(f"Error unpacking sprite data for {name}: {e}")
+    return sprites
+
+
 ###################### 物件類別 ######################
 # 定義遊戲中會使用到的物件類別
 # 例如：主角、敵人、障礙物等
@@ -93,8 +124,12 @@ class Platform:
     def __init__(self, x, y, width, height, color, is_special=False):
         self.rect = pygame.Rect(x, y, width, height)  # 設定平台的矩形範圍
         self.color = color  # 設定平台的顏色
+        self.is_special = is_special  # 設定彈簧是否為特殊彈簧
+        self.is_touched = False  # 設定特殊彈簧是否已被觸碰
 
     def draw(self, display_area):
+        if self.is_special and self.is_touched:
+            return  # 如果彈簧是特殊彈簧且已被觸碰，則不繪製
         pygame.draw.rect(display_area, self.color, self.rect)
         # 在指定的顯示區域上繪製平台
 
@@ -103,12 +138,8 @@ class Spring:
     def __init__(self, x, y, width, height, color):
         self.rect = pygame.Rect(x, y, width, height)  # 設定彈簧的矩形範圍
         self.color = color  # 設定彈簧的顏色
-        self.is_special = is_special  # 設定彈簧是否為特殊彈簧
-        self.is_special = is_special = False
 
     def draw(self, display_area):
-        if self.is_special and self.is_touched:
-            return  # 如果彈簧是特殊彈簧且已被觸碰，則不繪製
         pygame.draw.rect(display_area, self.color, self.rect)
 
     def move_with_platform(self, dy):
@@ -181,9 +212,13 @@ def update_camera():
         if len(platforms) < platform_count:
             x = random.randint(0, bg_x - platform_w)  # 隨機生成平台的 x 座標
             y = y_min - 60  # 計算平台的 y 座標，讓平台間隔一定距離
-            platform = Platform(
-                x, y, platform_w, platform_h, (255, 255, 255)
-            )  # 建立平台物件，設定位置、大小與顏色
+
+            if score > 100 and random.random() < special_platform_chance:
+                platform = Platform(x, y, platform_w, platform_h, (255, 0, 0), True)
+            else:
+                platform = Platform(
+                    x, y, platform_w, platform_h, (255, 255, 255)
+                )  # 建立平台物件，設定位置、大小與顏色
 
             platforms.append(platform)  # 將平台物件加入平台列表
             if random.random() < spring_chance:  # 根據彈簧出現的機率決定是否生成彈簧
@@ -215,10 +250,7 @@ def reset_game():
     for i in range(platform_count - 1):
         x = random.randint(0, bg_x - platform_w)  # 隨機生成平台的 x 座標
         y = (bg_y - 100) - (i * 60)
-        if score > 100 and random.random() < special_platform_chance:
-            platform = Platform(x, y, platform_w, platform_h, (255, 0, 0), True)
-        else:
-            platform = Platform(x, y, platform_w, platform_h, (255, 255, 255))
+        platform = Platform(x, y, platform_w, platform_h, (255, 255, 255))
         platforms.append(platform)  # 將平台物件加入平台列表
     if random.random() < spring_chance:  # 根據彈簧出現的機率決定是否生成彈簧
         spring_w = 20
