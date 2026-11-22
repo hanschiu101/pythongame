@@ -5,12 +5,13 @@ import random  # 載入 random 套件，用來產生隨機數
 import os  # 載入 os 套件，用來處理檔案與目錄相關功能
 
 os.chdir(sys.path[0])  # 設定工作目錄為程式所在的目錄
-###################### 全程變數 ######################
+###################### 全域變數 ######################
 score = 0  # 記錄遊戲分數
 highest_score = 0  # 記錄最高分數
 game_over = False  # 記錄遊戲是否結束
 initial_platform_y = 0
 spring_chance = 0.2  # 記錄彈簧出現的機率
+special_platform_chance = 0.2  # 記錄特殊平台出現的機率
 springs = []  # 記錄彈簧物件的列表
 
 
@@ -55,12 +56,19 @@ class Player:
                         and test_rect.bottom <= spring.rect.bottom
                         and test_rect.right >= spring.rect.left
                         and test_rect.left <= spring.rect.right
+                    ):
+                        self.rect.bottom = spring.rect.top  # 將主角的底部設為彈簧的頂部
+                        self.velocity_y = self.jump_power * 2
+                        return True
+        return False
 
     def check_platform_collision(self, platforms):
         if self.velocity_y > 0:
             cheak_points = max(1, int(abs(self.velocity_y) / 5))
             step_y = self.velocity_y / cheak_points
             for platform in platforms:
+                if platform.is_special and platform.is_touched:
+                    continue  # 如果平台是特殊平台且已被觸碰，則跳過碰撞檢查
                 for i in range(cheak_points):
                     test_rect = self.rect.copy()
                     test_rect.y += i * step_y
@@ -70,6 +78,8 @@ class Player:
                         and test_rect.right >= platform.rect.left
                         and test_rect.left <= platform.rect.right
                     ):
+                        if platform.is_special:
+                            platform.is_touched = True  # 設定特殊平台已被觸碰
                         self.rect.bottom = (
                             platform.rect.top
                         )  # 將主角的底部設為平台的頂部
@@ -80,7 +90,7 @@ class Player:
 
 
 class Platform:
-    def __init__(self, x, y, width, height, color):
+    def __init__(self, x, y, width, height, color, is_special=False):
         self.rect = pygame.Rect(x, y, width, height)  # 設定平台的矩形範圍
         self.color = color  # 設定平台的顏色
 
@@ -93,8 +103,12 @@ class Spring:
     def __init__(self, x, y, width, height, color):
         self.rect = pygame.Rect(x, y, width, height)  # 設定彈簧的矩形範圍
         self.color = color  # 設定彈簧的顏色
+        self.is_special = is_special  # 設定彈簧是否為特殊彈簧
+        self.is_special = is_special = False
 
     def draw(self, display_area):
+        if self.is_special and self.is_touched:
+            return  # 如果彈簧是特殊彈簧且已被觸碰，則不繪製
         pygame.draw.rect(display_area, self.color, self.rect)
 
     def move_with_platform(self, dy):
@@ -234,7 +248,8 @@ while True:
             player.move(1, bg_x)  # 主角向右移動
 
         player.apply_gravity()  # 應用重力影響主角
-        player.check_platform_collision(platforms)  # 檢查主角是否與平台碰
+        if not player.check_spring_collision(springs):  # 檢查主角是否與彈簧碰撞
+            player.check_platform_collision(platforms)  # 檢查主角是否與平台碰
         if player.rect.top > bg_y:  # 如果主角超出下邊界
             game_over = True  # 設定遊戲結束
             if score > highest_score:
